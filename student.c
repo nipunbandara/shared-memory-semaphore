@@ -23,11 +23,13 @@ void error (char *msg);
 
 int main (int argc, char **argv)
 {
-    key_t s_key1, s_key2, s_key3, s_key4;
+    key_t s_key1, s_key2, s_key3, s_key4, s_key5;
     s_key1 = 45678;
     s_key2 = 45667;
     s_key3 = 45656;
     s_key4 = 45645;
+    s_key5 = 45655;
+    
     union semun  
     {
         int val;
@@ -35,7 +37,8 @@ int main (int argc, char **argv)
         ushort array [1];
     } sem_attr;
     int shm_id;
-    struct shared_memory *shared_mem_ptr;
+    struct shared_memory *shared_mem_ptr1;
+    struct shared_memory *shared_mem_ptr2;
     int mutex_sem, buffer_count_sem, spool_signal_sem;
     
     printf ("spooler: hello world\n");
@@ -54,11 +57,21 @@ int main (int argc, char **argv)
     if ((shm_id = shmget (s_key2, sizeof (struct shared_memory), 
          0660 | IPC_CREAT)) == -1)
         error ("shmget");
-    if ((shared_mem_ptr = (struct shared_memory *) shmat (shm_id, NULL, 0)) 
+    if ((shared_mem_ptr1 = (struct shared_memory *) shmat (shm_id, NULL, 0)) 
          == (struct shared_memory *) -1) 
         error ("shmat");
     // Initialize the shared memory
     shared_mem_ptr -> buffer_index = shared_mem_ptr -> buffer_print_index = 0;
+
+
+    if ((shm_id = shmget (s_key5, sizeof (struct shared_memory), 
+         0660 | IPC_CREAT)) == -1)
+        error ("shmget");
+    if ((shared_mem_ptr2 = (struct shared_memory *) shmat (shm_id, NULL, 0)) 
+         == (struct shared_memory *) -1) 
+        error ("shmat");
+    // Initialize the shared memory
+    shared_mem_ptr2 -> buffer_index = shared_mem_ptr2 -> buffer_print_index = 0;
 
     // counting semaphore, indicating the number of available buffers.
     /* generate a key for creating semaphore  */
@@ -98,13 +111,25 @@ int main (int argc, char **argv)
         if (semop (spool_signal_sem, asem, 1) == -1)
 	    perror ("semop: spool_signal_sem");
     
-        printf ("%s", shared_mem_ptr -> buf [shared_mem_ptr -> buffer_print_index]);
+        printf ("%s", shared_mem_ptr1 -> buf [shared_mem_ptr1 -> buffer_print_index]);
+
+        // P (mutex_sem);
+        asem [0].sem_op = -1;
+        if (semop (mutex_sem, asem, 1) == -1)
+	    error ("semop: mutex_sem");
+
 
         /* Since there is only one process (the spooler) using the 
            buffer_print_index, mutex semaphore is not necessary */
-        (shared_mem_ptr -> buffer_print_index)++;
-        if (shared_mem_ptr -> buffer_print_index == MAX_BUFFERS)
-           shared_mem_ptr -> buffer_print_index = 0;
+        (shared_mem_ptr1 -> buffer_print_index)++;
+        if (shared_mem_ptr1 -> buffer_print_index == MAX_BUFFERS)
+           shared_mem_ptr1 -> buffer_print_index = 0;
+
+         // Release mutex sem: V (mutex_sem)
+        asem [0].sem_op = 1;
+        if (semop (mutex_sem, asem, 1) == -1)
+	    error ("semop: mutex_sem");
+    
 
         /* Contents of one buffer has been printed.
            One more buffer is available for use by producers.

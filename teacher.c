@@ -1,3 +1,4 @@
+   
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -23,17 +24,15 @@ struct shared_memory {
 
 void error (char *msg);
 
-int main (int argc, char **argv)
+int main (int argc, char *argv[])
 {
     key_t s_key1, s_key2, s_key3, s_key4, s_key5;
     s_key1 = 45678;
     s_key2 = 45667;
     s_key3 = 45656;
     s_key4 = 45645;
-    s_key5 = 45655;
+    s_key5 = 45454;
     
-    char inputchar;
-
     union semun  
     {
         int val;
@@ -58,13 +57,12 @@ int main (int argc, char **argv)
     if ((shared_mem_ptr1 = (struct shared_memory *) shmat (shm_id, NULL, 0)) 
          == (struct shared_memory *) -1) 
         error ("shmat");
-
+        
     if ((shm_id = shmget (s_key5, sizeof (struct shared_memory), 0)) == -1)
         error ("shmget");
     if ((shared_mem_ptr2 = (struct shared_memory *) shmat (shm_id, NULL, 0)) 
          == (struct shared_memory *) -1) 
         error ("shmat");
-
 
     // counting semaphore, indicating the number of available buffers.
     /* generate a key for creating semaphore  */
@@ -84,166 +82,121 @@ int main (int argc, char **argv)
     asem [0].sem_op = 0;
     asem [0].sem_flg = 0;
 
-    char buf [200];
-
-    printf("Input Command :");
-
-    while (fgets (inputchar, 198, stdin)) {
-
-        if(tolower(inputchar) == "d")
-            buf = "Teacher is Deleting a file";
-
+	//teacher
+	//seletcted book name
+    char buf [200] = "student selected";
 
         // remove newline from string
         int length = strlen (buf);
         if (buf [length - 1] == '\n')
            buf [length - 1] = '\0';
 
-        // get a buffer: P (buffer_count_sem);
-        asem [0].sem_op = -1;
-        if (semop (buffer_count_sem, asem, 1) == -1)
-	    error ("semop: buffer_count_sem");
-    
-        /* There might be multiple producers. We must ensure that 
-            only one producer uses buffer_index at a time.  */
-        // P (mutex_sem);
-        asem [0].sem_op = -1;
-        if (semop (mutex_sem, asem, 1) == -1)
-	    error ("semop: mutex_sem");
+	printf("teacher is updating file");
+	sleep(10);
+	
+	
+	//if(shared_mem_ptr2 -> buf [shared_mem_ptr2 -> buffer_print_index] != "teacher selected")
+	
+	//should be true if student is selected teacher's book
+	//should be false if student is accessing first
+	if(0)
+	{	
+		// get a buffer: P (buffer_count_sem);
+		asem [0].sem_op = -1;
+		if (semop (buffer_count_sem, asem, 1) == -1)
+		    error ("semop: buffer_count_sem");
+		
+		
+		printf ("%s", shared_mem_ptr2 -> buf [shared_mem_ptr2 -> buffer_print_index]);  
+		
+	    
+		/* There might be multiple producers. We must ensure that 
+		    only one producer uses buffer_index at a time.  */
+		// P (mutex_sem);
+		asem [0].sem_op = -1;
+		if (semop (mutex_sem, asem, 1) == -1)
+		    error ("semop: mutex_sem");
 
-	    // Critical section
+		    // Critical section
+		    sprintf (shared_mem_ptr1 -> buf [shared_mem_ptr1 -> buffer_index], "(%d): %s\n", getpid (), buf);
+		    (shared_mem_ptr1 -> buffer_index)++;
+		    if (shared_mem_ptr1 -> buffer_index == MAX_BUFFERS)
+		        shared_mem_ptr1 -> buffer_index = 0;
+		        
+		    /* Since there is only one process (the spooler) using the 
+		   buffer_print_index, mutex semaphore is not necessary */
+		
+		// Release mutex sem: V (mutex_sem)
+		asem [0].sem_op = 1;
+		if (semop (mutex_sem, asem, 1) == -1)
+		    error ("semop: mutex_sem");
+	    
+		// Tell spooler that there is a string to print: V (spool_signal_sem);
+		asem [0].sem_op = 1;
+		if (semop (spool_signal_sem, asem, 1) == -1)
+		    error ("semop: spool_signal_sem");
+
+		
+		if (shmdt ((void *) shared_mem_ptr1) == -1)
+			error ("shmdt");
+	       	if (shmdt ((void *) shared_mem_ptr2) == -1)
+			error ("shmdt");
+			
+	}
+	else
+   	{
+   		printf("teacher is modifiying the current file");
+		// Is there a string to print? P (spool_signal_sem);
+		asem [0].sem_op = -1;
+		if (semop (spool_signal_sem, asem, 1) == -1)
+		    perror ("semop: spool_signal_sem");
+	    
+		
+		
+		
+		// P (mutex_sem);
+		asem [0].sem_op = -1;
+		if (semop (mutex_sem, asem, 1) == -1)
+		    error ("semop: mutex_sem");
+
+		    // Critical section
+		    sprintf (shared_mem_ptr1 -> buf [shared_mem_ptr1 -> buffer_index], "(%d): %s\n", getpid (), buf);
+		    (shared_mem_ptr1 -> buffer_index)++;
+		    if (shared_mem_ptr1 -> buffer_index == MAX_BUFFERS)
+		        shared_mem_ptr1 -> buffer_index = 0;
+
+		
+		/* Since there is only one process (the spooler) using the 
+		   buffer_print_index, mutex semaphore is not necessary */
+		(shared_mem_ptr2 -> buffer_print_index)++;
+		if (shared_mem_ptr2 -> buffer_print_index == MAX_BUFFERS)
+		   shared_mem_ptr2 -> buffer_print_index = 0;
+		   
+		   
+		// Release mutex sem: V (mutex_sem)
+		asem [0].sem_op = 1;
+		if (semop (mutex_sem, asem, 1) == -1)
+		    error ("semop: mutex_sem");
+	    
 
 
-            sprintf (shared_mem_ptr1 -> buf [shared_mem_ptr1 -> buffer_index], "(%d): %s\n", getpid (), buf);
-            (shared_mem_ptr1 -> buffer_index)++;
-            if (shared_mem_ptr1 -> buffer_index == MAX_BUFFERS)
-                shared_mem_ptr1 -> buffer_index = 0;
+		/* Contents of one buffer has been printed.
+		   One more buffer is available for use by producers.
+		   Release buffer: V (buffer_count_sem);  */
+		asem [0].sem_op = 1;
+		if (semop (buffer_count_sem, asem, 1) == -1)
+		    perror ("semop: buffer_count_sem");
+	}
 
-            switch(tolower(inputchar))
-            {
-                case 'u': writeshm(argv[2]);
-                    break;
-                case 'r': readshm(argv[2]);
-                    break;
-                case 'v': viewallshm(argv[2]);
-                    break;
-                case 'd': removeshm(argv[2]);
-                    break;
-                case 'm': changemode(argv[2]);
-                    break;
-                default: usage();
-            } 
-
-        // Release mutex sem: V (mutex_sem)
-        asem [0].sem_op = 1;
-        if (semop (mutex_sem, asem, 1) == -1)
-	    error ("semop: mutex_sem");
-    
-	    // Tell spooler that there is a string to print: V (spool_signal_sem);
-        asem [0].sem_op = 1;
-        if (semop (spool_signal_sem, asem, 1) == -1)
-	    error ("semop: spool_signal_sem");
-
-        printf("Input Command :");
-        
-    }
- 
-    if (shmdt ((void *) shared_mem_ptr) == -1)
-        error ("shmdt");
-    exit (0);
+	
+	
 }
+   
+
 
 // Print system error and exit
 void error (char *msg)
 {
     perror (msg);
     exit (1);
-}
-
-
-usage()
-{
-	fprintf(stderr, "A utility for tinkering with shared memory\n");
-	fprintf(stderr, "\nUSAGE: (w)rite <text>\n");
-	fprintf(stderr, " (r)ead\n");
-	fprintf(stderr, " (d)elete\n");
-	fprintf(stderr, " (m)ode change <octal mode>\n");
-	exit(1);
-}
-
-
-changemode(char *mode)
-{
-	printf("Old permissions were: %o\n", myshmds.shm_perm.mode);
-	sscanf(mode, "%o", &myshmds.shm_perm.mode);
-	printf("New permissions are : %o\n", myshmds.shm_perm.mode);
-}
-
-writeshm(char *text)
-{	
-	FILE *fp;
-	fp = fopen(text, "w");
-	fclose(fp);
-	
-	if (fp  > 1)	
-	{
-		printf("File %s Uploaded Successfully...\n", text);	
-	}
-	else	
-	{
-		printf("File %s Uploade unuccessful...\n", text);		
-	}
-	
-}
-
-viewallshm(char *segptr)
-{
-	
-//	struct dirent *de;
-//	
-//		DIR *dr = opendir(".");
-//		if(dr == NULL)
-//		{
-//			printf("Could not open current directory");		
-//		}
-	
-//		while ((de = readdir(dr)) != NULL) 
-//			printf("%s\n", de->d_name);
-	
-//		closedir(dr);
-		
-	
-}
-readshm(char *text)
-{
-	
-	char ch, file_name[25];
-	
-   FILE *fp;
-   printf("Enter name of a file you wish to see\n");
-   gets(file_name);
-
-   
-
-   fp = fopen(text, "r"); // read mode
-
-  printf("%s", text);
-
-   fclose(fp);
-	
-}
-
-
-
-removeshm(char *text)
-{
-	
-	if (remove(text) == 0)	
-	{
-		printf("File %s Deleted Successfully...\n", text);	
-	}
-	else	
-	{
-		printf("File %s Delete unuccessful...\n", text);		
-	}
 }

@@ -112,6 +112,7 @@ int main (int argc, char **argv)
 
    	//teacher selected == to student selected
    //if( shared_mem_ptr1 -> buf [shared_mem_ptr1 -> buffer_print_index] == " student selected")
+	   //if(strcmp(shared_mem_ptr1 -> buf [shared_mem_ptr1 -> buffer_print_index], "student selected") == 0)
    
    //should be true if student's book name == teacher's book
    //should be false if student is reading first and equal to teacher's book
